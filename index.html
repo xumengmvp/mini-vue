@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <script src="./src/render.js"></script>
+  <script src="./src/reactive.js"></script>
+  <script src="./src//index.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const App = {
+      data: reactive({
+        counter: 0
+      }),
+      render() {
+        return h("div", {class: "counter"}, [
+          h("div", null, `当前计数为：${this.data.counter}`),
+          h("button", {
+            onClick: () => {
+              this.data.counter++
+            }
+          }, "+1")
+        ])
+      }
+    }
+
+    const app = createApp(App)
+    app.mount("#app")
+  </script>
+</body>
+</html>  
