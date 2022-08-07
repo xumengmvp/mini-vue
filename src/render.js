@@ -1,4 +1,4 @@
-// children 的类型暂定数组或者字符串， 对象slots暂不考虑
+// 渲染器函数的实现
 const h = (tag, props, children) => {
   return {
     tag,
@@ -7,112 +7,127 @@ const h = (tag, props, children) => {
   }
 }
 
+// vnode -> dom
 const mount = (vnode, container) => {
-  // 创建真实元素，保存el属性
-  const vnodeWarp = vnode.el =  document.createElement(vnode.tag)
+  // 1.根据虚拟vnode创建真实el, 并在vnode保留el
+  const el = vnode.el = document.createElement(vnode.tag)
 
-  // 设置标签属性
+  // 2.处理props
   if (vnode.props) {
-    for (attr in vnode.props) {
-      if (attr.startsWith("on")) {
-        vnodeWarp.addEventListener(attr.slice(2).toLowerCase(), vnode.props[`${attr}`])
+    for (const key in vnode.props) {
+      const value = vnode.props[key]
+      // 处理事件
+      if (key.startsWith("on")) {
+        el.addEventListener(key.slice(2).toLowerCase(), value)
       } else {
-        vnodeWarp.setAttribute(attr, vnode.props[`${attr}`])
+        el.setAttribute(key, value)
       }
     }
   }
 
-  // 处理childern节点
-  if (typeof vnode.children === "string") {
-    vnodeWarp.textContent = vnode.children
-  } else {
-    vnode.children.forEach(item => {
-      mount(item, vnodeWarp)
-    })
+  // 3.处理children
+  if(vnode.children) {
+    if (typeof vnode.children === "string") {
+      el.textContent = vnode.children
+    } else { // 数组
+      for (const children of vnode.children) {
+        mount(children, el)
+      }
+    }
   }
-
-  container.appendChild(vnodeWarp)
+  // 4.将el挂载到container上
+  container.appendChild(el)
 }
 
+// diff -> new vnode
+const patch = (n1, n2) => {
+  if (n1.tag !== n2.tag) {
+    const parentElement = n1.el.parentElement
+    parentElement.removeChild(n1.el)
+    mount(n2, parentElement)
+  } else {
+    // 1.取出element对象，并在新节点vnode2中保存
+    const el = n2.el = n1.el
+    
+    // 2.处理props
+    const n1Props = n1.props || {}
+    const n2Props = n2.props || {}
 
-const patch = (node1, node2) => {
-  if (node1.tag !== node2.tag) {  // 比较类型是否相同, 类型不相同直接进行替换
-    const node1Parent = node1.el.parentElement; // 获取父节点
-    node1Parent.removeChild(node1.el)
-    mount(vnode2, node1Parent)
-  } else { // 类型相同，处理props和children
+    // 2.1获取所有的n2Props, 添加到el
+    for(const key in n2Props) {
+      const value = n2Props[key]
+      const n1Value = n1Props[key]
+      if (key in n1Props) {
+        if (key.startsWith("on")) {
+          el.removeEventListener(key.slice(2).toLowerCase(), n1Value)
+          el.addEventListener(key.slice(2).toLowerCase(), value)
+        } else if (value != n1Value) {
+          el.setAttribute(key, value)
+        }
+      } else if (key.startsWith("on")) {
+        el.addEventListener(key.slice(2).toLowerCase(), value)
+      } else {
+        el.setAttribute(key, value)
+      }
+    }
 
-    // 取出el dom对象
-    const el = node2.el = node1.el
+    //2.2 删除旧的props
+    for(const key in n1Props) {
+      if (!(key in n2Props)) {
+        if (key.startsWith("on")) {
+          el.removeEventListener(key.slice(2).toLowerCase(), n1Props[key])
+        } else {
+          el.removeAttribute(key)
+        }
+      }
+    }
 
-    // 处理props
-    node1.props = node1.props || {}
-    node2.props = node2.props || {}
+    //3.处理children
+    const n1Children = n1.children || []
+    const n2Children = n2.children || []
 
-    // 增加合并props
-    for (const attr in node2.props) {
-      if (attr in node1.props) {
-        if (node1.props[`${attr}`] !== node2.props[`${attr}`]) {
-          if (attr.startsWith("on")) {
-            el.addEventListener(attr.slice(2).toLowerCase(), node2.props[`${attr}`])
-          } else {
-            el.setAttribute(attr, node2.props[`${attr}`])
+    if (typeof n2Children === "string") {
+      if (n1Children !== n2Children) {
+        el.textContent = n2Children
+      }
+    } else { // n2Children是一个数组
+      if (typeof n1Children === "string") {
+        el.textContent = ""
+        for (const children of  n2Children) {
+          mount(children, el)
+        }
+      } else {
+
+        /*
+           // 不考虑key进行patch操作 -> diff算法
+           n1Children: [v1, v2, v3, v4, v5]
+           n2Children: [v1, v2, v3, v4, v5, v6]
+
+           n1Children: [v1, v2, v3, v4, v5]
+           n2Children: [v1, v2, v3]
+        */
+        const commonLength = Math.min(n1Children.length, n2Children.length)
+
+        for(let i = 0; i < commonLength; i++) {
+          patch(n1Children[i], n2Children[i])
+        }
+
+        // 卸载操作
+        if (n1Children.length > n2Children.length) {
+          for(let i = commonLength; i < n1Children.length; i++) {
+            el.removeChild(n1Children[i].el)
           }
-        }
-      } else {
-        if (attr.startsWith("on")) {
-          el.addEventListener(attr.slice(2).toLowerCase(), node2.props[`${attr}`])
-        } else {
-          el.setAttribute(attr, node2.props[`${attr}`])
-        }
-      }
-    }
-
-    // 删除props
-    for (const attr in node1.props) {
-      if (!(attr in node2.props)) {
-        if (attr.startsWith("on")) {
-          el.removeEventListener(attr.slice(2).toLowerCase(), node2.props[`${attr}`])
-        } else {
-          el.removeAttribute(attr, node2.props[`${attr}`])
-        }
-      }
-    }
-
-    // edge case maybe small / 字符串
-    if (typeof node2.children === "string") {
-      el.innerHTML = node2.children
-    } else { // 数组
-      if (typeof node1.children === "string") {
-        el.innerHTML = ""
-        for(const vnode of node2.children) {
-          mount(vnode, el)
-        }
-      } else {
-        // (不考虑有key的情况) 进行children patch
-        // 有key时，可以进行算法优化 differ 算法
-
-        node1.children = node1.children || []
-        node2.children = node2.children || []
-
-        const commonLength = Math.min(node1.children.length, node2.children.length)
-
-        for (let i = 0; i < commonLength; i++) {
-          patch(node1.children[i], node2.children[i]) // 子节点继续patch操作
         }
         
-        // 旧节点大于新节点
-        if (node1.children.length > node2.children.length) {
-          for (let i = commonLength; i < node1.children.length; i++) {
-            el.removeChild(node1.children[i].el) // 卸载节点
-          }
-        } else {
-          // 新节点大于旧节点， 挂载节点
-          for (let i = commonLength; i < node2.children.length; i++) {
-            mount(node2.children[i], el)
+        // 挂载操作 mount
+        if (n2Children.length > n1Children.length) {
+          for(let i = commonLength; i < n2Children.length; i++) {
+            mount(n2Children[i], el)
           }
         }
+
       }
     }
+
   }
 }

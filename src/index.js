@@ -1,18 +1,19 @@
-const createApp = (rootElement) => {
+function createApp(rootComponent) {
+
   return {
     mount(selector) {
       const container = document.querySelector(selector)
       let isMounted = false
-      let oldNode = null
+      let oldVnode = null
       watchEffect(() => {
         if (!isMounted) {
-          oldNode = rootElement.render()
-          mount(oldNode, container)
+          oldVnode = rootComponent.render()
+          mount(oldVnode, container)
           isMounted = true
         } else {
-          const newNode = rootElement.render()
-          patch(oldNode, newNode)
-          oldNode = newNode
+          const newVnode = rootComponent.render()
+          patch(oldVnode, newVnode)
+          oldVnode = newVnode
         }
       })
     }

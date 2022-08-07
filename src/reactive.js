@@ -10,17 +10,13 @@ class Dep {
   }
 
   notify() {
-    this.subscribers.forEach(effect => {
+    this.subscribers.forEach((effect) => {
       effect()
     })
   }
 }
 
-let activeEffect = null;
-
-let targetMap = new WeakMap()
-
-const dep = new Dep()
+let activeEffect = null
 
 function watchEffect(effect) {
   activeEffect = effect
@@ -28,17 +24,18 @@ function watchEffect(effect) {
   activeEffect = null
 }
 
-// 构造依赖数据结构, 对对象的每个key做劫持，创建key的依赖
-// {obj, {key1: dep2(), key2: dep2()}}
+const targetMap = new WeakMap();
+
 function getDep(target, key) {
+  // 根据target对象找到depsMap对象
   let depsMap = targetMap.get(target)
   if (!depsMap) {
     depsMap = new Map()
-    targetMap.set(target, depsMap)
+    targetMap.set(target,depsMap)
   }
 
+  // 根据key值找到dep对象
   let dep = depsMap.get(key)
-
   if (!dep) {
     dep = new Dep()
     depsMap.set(key, dep)
@@ -46,16 +43,15 @@ function getDep(target, key) {
   return dep
 }
 
-// 数据劫持 vue2
+// 数据劫持 vue2, 不能劫持新加的属性，必须Vue.$set(), 重新设置代理
 // function reactive(raw) {
 //   Object.keys(raw).forEach(key => {
 //     const dep = getDep(raw, key)
-//     let value = raw[`${key}`]
+//     let value = raw[key]
 //     Object.defineProperty(raw, key, {
 //       get() {
 //         dep.depend()
 //         return value
-//         return raw[`${key}`] // 会产生循环调用， 不是使用
 //       },
 //       set(newValue) {
 //         value = newValue
@@ -63,24 +59,34 @@ function getDep(target, key) {
 //       }
 //     })
 //   })
-
-//   return raw // 返回的原始对象
+//   return raw
 // }
 
-
-// 数据劫持 vue3
+// 数据劫持 vue3, Proxy不兼容IE浏览器, 具有更多的api, has, deleteProperty等
 function reactive(raw) {
-  // 返回的proxy对象
   return new Proxy(raw, {
-    get(target, key, recevier) {
-      const dep = getDep(raw, key)
+    get(target, property, receiver) {
+      const dep = getDep(target, property)
       dep.depend()
-      return raw[`${key}`] // 不会产生循环调用 
+      return target[property]
     },
-    set(target, key, newValue) {
-      const dep = getDep(raw, key)
-      raw[`${key}`] = newValue
+    set(target, property, newValue, receiver) {
+      const dep = getDep(target, property)
+      target[property] = newValue
       dep.notify()
     }
   })
 }
+
+
+
+// 例子
+const info = reactive({ counter: 0, name: "张三" })
+
+watchEffect(function doubleCounter() {
+  console.log(info.counter * 2, info.name)  // -> 触发数据劫持
+})
+
+watchEffect(function powerCounter() {
+  console.log(info.counter * info.counter) // -> 触发数据劫持
+})
